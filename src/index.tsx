@@ -55,6 +55,7 @@ const ZapThreads = (props: { [key: string]: string; }) => {
     store.disableFeatures = props.disable.split(',').map(e => e.trim()).filter(isDisableType);
     store.urlPrefixes = parseUrlPrefixes(props.urls);
     store.replyPlaceholder = props.replyPlaceholder;
+    store.client = props.client;
   });
 
   const anchor = () => store.anchor!;
@@ -423,6 +424,7 @@ customElement<ZapThreadsAttributes>('zap-threads', {
   urls: "",
   'reply-placeholder': "",
   'legacy-url': "",
+  client: "",
 }, (props) => {
   return <ZapThreads
     anchor={props['anchor'] ?? ''}
@@ -436,9 +438,10 @@ customElement<ZapThreadsAttributes>('zap-threads', {
     urls={props['urls'] ?? ''}
     replyPlaceholder={props['reply-placeholder'] ?? ''}
     legacyUrl={props['legacy-url'] ?? ''}
+    client={props['client'] ?? ''}
   />;
 });
 
 export type ZapThreadsAttributes = {
-  [key in 'anchor' | 'version' | 'relays' | 'user' | 'author' | 'disable' | 'urls' | 'reply-placeholder' | 'legacy-url' | 'mode' | 'npubpro']?: string;
+  [key in 'anchor' | 'version' | 'relays' | 'user' | 'author' | 'disable' | 'urls' | 'reply-placeholder' | 'legacy-url' | 'mode' | 'npubpro' | 'client']?: string;
 } & JSX.HTMLAttributes<HTMLElement>;

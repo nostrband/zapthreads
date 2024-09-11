@@ -138,6 +138,10 @@ export const ReplyEditor = (props: { replyTo?: string; onDone?: Function; input?
       } catch (_) { }
     }
 
+    if (store.client) {
+      unsignedEvent.tags.push(['client', store.client]);
+    }
+
     // If it is a reply, prepare root and reply tags
     if (props.replyTo) {
       const replyEvent = await find('events', IDBKeyRange.only(props.replyTo));

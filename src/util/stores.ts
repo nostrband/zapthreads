@@ -48,6 +48,7 @@ export type PreferencesStore = {
   disableFeatures?: DisableType[]; // prop
   urlPrefixes?: { [key in UrlPrefixesKeys]?: string }, // prop
   replyPlaceholder?: string,
+  client?: string,
 
   anchorAuthor?: string;
   profiles: () => Profile[];

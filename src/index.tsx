@@ -119,7 +119,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
       if (anchor().type === "error") return;
 
       let filterForRemoteRootEvents: Filter;
-      let localRootEvents: NoteEvent[];
+      let localRootEvents: NoteEvent[] = [];
 
       // Find root events from anchor
       // We sort by date so that the IDs are kept in order before discarding the timestamp
@@ -164,7 +164,8 @@ const ZapThreads = (props: { [key: string]: string }) => {
           };
           break;
         case "npub":
-          filterForRemoteRootEvents = { authors: [anchor().value], kinds: [4] };
+          // FIXME also need localRootEvents from cache
+          filterForRemoteRootEvents = { authors: [anchor().value], kinds: [0] };
           break;
         default:
           throw "error";
@@ -190,6 +191,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
       switch (anchor().type) {
         case "http":
         case "naddr":
+        case "npub":
           const events = [...localRootEvents, ...remoteRootNoteEvents];
           const sortedEventIds = sortByDate([...events]).map((e) => e.id);
           // only set root event ids if we have a newer event from remote
@@ -198,19 +200,6 @@ const ZapThreads = (props: { [key: string]: string }) => {
             store.rootEventIds[0]
           ) {
             store.rootEventIds = sortedEventIds;
-          }
-          break;
-        case "npub":
-          const eventsNpub = [...remoteRootNoteEvents];
-          const sortedEventIdsNpub = sortByDate([...eventsNpub]).map(
-            (e) => e.id
-          );
-          // only set root event ids if we have a newer event from remote
-          if (
-            (sortedEventIdsNpub.length > 0 && sortedEventIdsNpub[0]) !==
-            store.rootEventIds[0]
-          ) {
-            store.rootEventIds = sortedEventIdsNpub;
           }
           break;
         case "note":
@@ -231,7 +220,6 @@ const ZapThreads = (props: { [key: string]: string }) => {
     on(
       [rootEventIds, requestedVersion],
       () => {
-        const userPubkey = decode(props.user).data;
         // set the filter for finding actual comments
         switch (anchor().type) {
           case "http":
@@ -253,6 +241,12 @@ const ZapThreads = (props: { [key: string]: string }) => {
             store.version = requestedVersion() || rootEventIds()[0];
             return;
           case "npub":
+            const signer = signersStore.active;
+            if (!signer) {
+              store.filter = {};
+              return;
+            }
+            const userPubkey = signer.pk;
             store.filter = {
               "#p": [anchor().value, userPubkey],
               authors: [anchor().value, userPubkey],
@@ -338,6 +332,15 @@ const ZapThreads = (props: { [key: string]: string }) => {
             } else if (e.kind === 9735) {
               const invoiceTag = e.tags.find((t) => t[0] === "bolt11");
               invoiceTag && invoiceTag[1] && (newZaps[e.id] = invoiceTag[1]);
+            } else if (e.kind === 4) {
+              const signer = signersStore.active;
+              if (signer) {
+                const peer = e.pubkey === signer.pk ? e.tags.find(t => t.length >= 2 && t[0] === 'p')![1] : e.pubkey;
+                signer.nip04.decrypt!(peer, e.content).then(c => {
+                  e.content = c;
+                  save("events", eventToNoteEvent(e));
+                })
+              }
             }
           },
           oneose() {
@@ -409,9 +412,35 @@ const ZapThreads = (props: { [key: string]: string }) => {
         if (_.startsWith("nsec")) {
           sk = decode(_).data as Uint8Array;
           pubkey = getPublicKey(sk);
-        } else {
+        } else if (_.startsWith("npub")) {
           pubkey = decode(_).data as string;
+        } else {
+          pubkey = _;
         }
+
+        const getExt = async () => {
+          // We validate here in order to delay prompting the user as much as possible
+          if (!window.nostr) {
+            alert(
+              "Please log in with a NIP-07 extension such as Alby or nos2x"
+            );
+            signersStore.active = undefined;
+            throw "No extension available";
+          }
+
+          const extensionPubkey = await window.nostr!.getPublicKey();
+          const loggedInPubkey = pubkey;
+          if (loggedInPubkey !== extensionPubkey) {
+            // If zapthreads was passed a different pubkey then error
+            const error = `ERROR: Event not signed. Supplied pubkey does not match extension pubkey. ${loggedInPubkey} !== ${extensionPubkey}`;
+            signersStore.active = undefined;
+            alert(error);
+            throw error;
+          } else {
+            return window.nostr!;
+          }
+        };
+
         signersStore.external = {
           pk: pubkey,
           signEvent: async (event) => {
@@ -420,27 +449,28 @@ const ZapThreads = (props: { [key: string]: string }) => {
               return { sig: finalizeEvent(event, sk).sig };
             }
 
-            // We validate here in order to delay prompting the user as much as possible
-            if (!window.nostr) {
-              alert(
-                "Please log in with a NIP-07 extension such as Alby or nos2x"
-              );
-              signersStore.active = undefined;
-              throw "No extension available";
-            }
-
-            const extensionPubkey = await window.nostr!.getPublicKey();
-            const loggedInPubkey = pubkey;
-            if (loggedInPubkey !== extensionPubkey) {
-              // If zapthreads was passed a different pubkey then error
-              const error = `ERROR: Event not signed. Supplied pubkey does not match extension pubkey. ${loggedInPubkey} !== ${extensionPubkey}`;
-              signersStore.active = undefined;
-              alert(error);
-              throw error;
-            } else {
-              return window.nostr!.signEvent(event);
-            }
+            return (await getExt()).signEvent(event);
           },
+          nip04: {
+            decrypt: async (pubkey: string, ciphertext: string) => {
+              if (sk) throw new Error("Not supported");
+              return (await getExt()).nip04.decrypt(pubkey, ciphertext);
+            },
+            encrypt: async (pubkey: string, plaintext: string) => {
+              if (sk) throw new Error("Not supported");
+              return (await getExt()).nip04.encrypt(pubkey, plaintext);
+            },
+          },
+          nip44: {
+            decrypt: async (pubkey: string, ciphertext: string) => {
+              if (sk) throw new Error("Not supported");
+              return (await getExt()).nip44.decrypt(pubkey, ciphertext);
+            },
+            encrypt: async (pubkey: string, plaintext: string) => {
+              if (sk) throw new Error("Not supported");
+              return (await getExt()).nip44.encrypt(pubkey, plaintext);
+            },
+          }
         };
         signersStore.active = signersStore.external;
       }

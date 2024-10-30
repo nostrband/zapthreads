@@ -23,9 +23,18 @@ export type SignersStore = {
   [key in 'active' | 'anonymous' | 'internal' | 'external']?: EventSigner;
 };
 export type SignEvent = (event: UnsignedEvent) => Promise<{ sig: string; }>;
+export type EncDec = (pubkey: string, data: string) => Promise<string>;
 export type EventSigner = {
   pk: string,
   signEvent?: SignEvent;
+  nip04: {
+    decrypt?: EncDec;
+    encrypt?: EncDec;
+  },
+  nip44: {
+    decrypt?: EncDec;
+    encrypt?: EncDec;
+  },
 };
 
 export type UrlPrefixesKeys = 'naddr' | 'nevent' | 'note' | 'npub' | 'nprofile' | 'tag';
@@ -65,6 +74,14 @@ declare global {
     nostr?: {
       getPublicKey(): Promise<string>;
       signEvent: SignEvent;
+      nip04: {
+        decrypt: EncDec;
+        encrypt: EncDec;
+      },
+      nip44: {
+        decrypt: EncDec;
+        encrypt: EncDec;
+      }
     };
   }
 }

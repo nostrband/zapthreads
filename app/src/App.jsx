@@ -6,7 +6,7 @@ import { Select } from "@thisbeyond/solid-select";
 import "@thisbeyond/solid-select/style.css";
 
 const options = [
-  { label: 'Tony Cark', name: 'npub1pmzw37x9fznr0a3znjy4t9rspgx8cs8duqw9tf7d72x2rykr6ypqzyxhmy' },
+  { label: 'Tony Cark', name: 'npub1f4vym2mu3q9fsz08muz8d469hl568l5358qx90qlaspyuz67ru0sfxvupf' },
   { label: "Purple Text, Orange Highlights (article by Gigi)", name: "naddr1qqxnzd3cxqmrzv3exgmr2wfeqgsxu35yyt0mwjjh8pcz4zprhxegz69t4wr9t74vk6zne58wzh0waycrqsqqqa28pjfdhz" },
   { label: "Nostr (fiatjaf's blog)", name: "https://fiatjaf.com/nostr.html" },
   { label: "A native internet protocol for social media (article by Jack)", name: "naddr1qqxnzd3cxyerxd3h8qerwwfcqgsgydql3q4ka27d9wnlrmus4tvkrnc8ftc4h8h5fgyln54gl0a7dgsrqsqqqa28387u5u" },

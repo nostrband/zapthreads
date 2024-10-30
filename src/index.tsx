@@ -91,6 +91,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
       .filter(isDisableType);
     store.urlPrefixes = parseUrlPrefixes(props.urls);
     store.replyPlaceholder = props.replyPlaceholder;
+    store.client = props.client;
   });
 
   const anchor = () => store.anchor!;

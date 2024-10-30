@@ -32,12 +32,14 @@ const ZapThreads = (props: { [key: string]: string; }) => {
         }
 
         const decoded = decode(anchor);
+        console.log({decoded})
         switch (decoded.type) {
           case 'nevent': return { type: 'note', value: decoded.data.id };
           case 'note': return { type: 'note', value: decoded.data };
           case 'naddr':
             const d = decoded.data;
             return { type: 'naddr', value: `${d.kind}:${d.pubkey}:${d.identifier}` };
+          case 'npub': return { type: 'npub', value: decoded.data}
         }
       } catch (e) {
         console.error(e);
@@ -61,6 +63,8 @@ const ZapThreads = (props: { [key: string]: string; }) => {
   const relays = () => store.relays!;
   const disableFeatures = () => store.disableFeatures!;
   const requestedVersion = () => props.version;
+
+  const isChatMode = store.mode === 'chat' || store.mode === 'dm'
 
   store.profiles = watchAll(() => ['profiles']);
 
@@ -104,6 +108,7 @@ const ZapThreads = (props: { [key: string]: string; }) => {
           break;
         }
       case 'naddr':
+      case 'npub':
         const [kind, pubkey, identifier] = anchor().value.split(':');
         localRootEvents = (await findAll('events', identifier, { index: 'd' })).filter(e => e.pk === pubkey);
         if (localRootEvents.length > 0) {
@@ -133,6 +138,7 @@ const ZapThreads = (props: { [key: string]: string; }) => {
     switch (anchor().type) {
       case 'http':
       case 'naddr':
+      case 'npub':
         const events = [...localRootEvents, ...remoteRootNoteEvents];
         const sortedEventIds = sortByDate([...events]).map(e => e.id);
         // only set root event ids if we have a newer event from remote
@@ -172,6 +178,14 @@ const ZapThreads = (props: { [key: string]: string; }) => {
         // Version only applicable to naddr - get provided version or default to most recent root event ID
         store.version = requestedVersion() || rootEventIds()[0];
         return;
+      case 'npub':
+        store.filter =         {
+          "#p":[props.anchor, props.user],
+          "authors":[props.anchor, props.user],
+          };
+
+        return;
+        
     }
   }, { defer: true }));
 
@@ -206,7 +220,11 @@ const ZapThreads = (props: { [key: string]: string; }) => {
       sub = null;
     });
 
-    const kinds = [1, 9802, 7, 9735];
+    let kinds = [1, 9802, 7, 9735];
+
+    if(isChatMode) {
+      kinds = [4]
+    }
     // TODO restore with a specific `since` for aggregates
     // (leaving it like this will fail when re-enabling likes/zaps)
     // if (!store.disableFeatures().includes('likes')) {
@@ -226,6 +244,7 @@ const ZapThreads = (props: { [key: string]: string; }) => {
     sub = pool.subscribeMany(_relays, [{ ..._filter, kinds, since }],
       {
         onevent(e) {
+          console.log({e})
           if (e.kind === 1 || e.kind === 9802) {
             if (e.content.trim()) {
               save('events', eventToNoteEvent(e));
@@ -377,8 +396,6 @@ const ZapThreads = (props: { [key: string]: string; }) => {
   };
 
   const [showAdvanced, setShowAdvanced] = createSignal(false);
-
-  const isChatMode = store.mode === 'chat'
 
   return <>
     <div id="ztr-root">

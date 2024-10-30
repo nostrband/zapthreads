@@ -6,6 +6,7 @@ import { Select } from "@thisbeyond/solid-select";
 import "@thisbeyond/solid-select/style.css";
 
 const options = [
+  { label: 'Tony Cark', name: 'npub1pmzw37x9fznr0a3znjy4t9rspgx8cs8duqw9tf7d72x2rykr6ypqzyxhmy' },
   { label: "Purple Text, Orange Highlights (article by Gigi)", name: "naddr1qqxnzd3cxqmrzv3exgmr2wfeqgsxu35yyt0mwjjh8pcz4zprhxegz69t4wr9t74vk6zne58wzh0waycrqsqqqa28pjfdhz" },
   { label: "Nostr (fiatjaf's blog)", name: "https://fiatjaf.com/nostr.html" },
   { label: "A native internet protocol for social media (article by Jack)", name: "naddr1qqxnzd3cxyerxd3h8qerwwfcqgsgydql3q4ka27d9wnlrmus4tvkrnc8ftc4h8h5fgyln54gl0a7dgsrqsqqqa28387u5u" },
@@ -69,7 +70,7 @@ function App() {
     <h3>Relays: <input type='text' value={relays()} onChange={(e) => setRelays(e.target.value)}></input></h3>
 
     <div style="min-height: 1000px; min-width: 700px; margin-top: -2rem">
-      {anchor() && <zap-threads npubpro="true" reply-placeholder='Reply something...' anchor={anchor()} mode="chat" disable={disabled().join(',')} relays={relays()} user={npub()} />}
+      {anchor() && <zap-threads npubpro="true" reply-placeholder='Reply something...' anchor={anchor()} mode="dm" disable={disabled().join(',')} relays={relays()} user={npub()} />}
     </div>
   </>;
 }

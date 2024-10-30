@@ -56,7 +56,7 @@ export type PreferencesStore = {
   initialThreadId?: string | null
 };
 
-export type Anchor = { type: 'http' | 'naddr' | 'note' | 'error', value: string; };
+export type Anchor = { type: 'http' | 'naddr' | 'note' | 'error' | 'npub', value: string; };
 
 // Globals
 

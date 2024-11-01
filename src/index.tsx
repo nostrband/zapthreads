@@ -514,12 +514,16 @@ const ZapThreads = (props: { [key: string]: string }) => {
 
   // Watch all events
   const eventsWatcher = createMemo(() => {
+    const hexUser = decode(npubOrNsec)
+    
     switch (anchor().type) {
       case "http":
       case "note":
         return watchAll(() => ["events", store.rootEventIds, { index: "ro" }]);
       case "naddr":
         return watchAll(() => ["events", anchor().value, { index: "a" }]);
+      case "npub":
+          return watchAll(() => ["events", anchor().value, { index: "po", k: [4], pk: anchor().value, po: hexUser.data }]);
       default: // error
         return () => [];
     }

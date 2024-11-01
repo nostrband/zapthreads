@@ -21,6 +21,7 @@ export type NoteEvent = {
   t?: string[]; // t tags
   d?: string; // d tag
   tl?: string; // title
+  po?: string;
 };
 
 export type AggregateEvent = {

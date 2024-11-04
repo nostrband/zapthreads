@@ -24,8 +24,7 @@ export type SignersStore = {
 };
 export type SignEvent = (event: UnsignedEvent) => Promise<{ sig: string; }>;
 export type EncDec = (pubkey: string, data: string) => Promise<string>;
-export type EventSigner = {
-  pk: string,
+export type EventSignerExt = {
   signEvent?: SignEvent;
   nip04: {
     decrypt?: EncDec;
@@ -35,6 +34,9 @@ export type EventSigner = {
     decrypt?: EncDec;
     encrypt?: EncDec;
   },
+};
+export type EventSigner = EventSignerExt & {
+  pk: string,
 };
 
 export type UrlPrefixesKeys = 'naddr' | 'nevent' | 'note' | 'npub' | 'nprofile' | 'tag';

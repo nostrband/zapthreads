@@ -17,11 +17,10 @@
           window.__nlAuthed = false;
         }
 
-        const pubkey = await window.nostr.getPublicKey();
         const zapThreads = document.querySelector('zap-threads');
         if (zapThreads) {
           if (window.__nlAuthed)
-            zapThreads.setAttribute("user", pubkey);
+            zapThreads.setAttribute("user", await window.nostr.getPublicKey());
           else
             zapThreads.setAttribute("user", "");
         }

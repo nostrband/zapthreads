@@ -1,12 +1,13 @@
 import { DBSchema, IDBPDatabase, StoreNames } from "idb";
 import { parse } from "nostr-tools/nip10";
 import { UnsignedEvent } from "nostr-tools/pure";
+import { formatDMIndex } from "./dm.ts";
 
 // models
 
 export type NoteEvent = {
   id: string;
-  k: 1 | 8812 | 9802 | 30023;
+  k: 1 | 8812 | 9802 | 30023 | 4;
   c: string;
   ts: number;
   pk: string;
@@ -22,6 +23,7 @@ export type NoteEvent = {
   d?: string; // d tag
   tl?: string; // title
   po?: string;
+  dm?: string;
 };
 
 export type AggregateEvent = {
@@ -57,6 +59,7 @@ export interface ZapthreadsSchema extends DBSchema {
       'r': string;
       'd': string;
       'k': number;
+      'dm': string;
     };
   };
   aggregates: {
@@ -98,6 +101,7 @@ export const upgrade = async (db: IDBPDatabase<ZapthreadsSchema>, currentVersion
   events.createIndex('r', 'r');
   events.createIndex('d', 'd');
   events.createIndex('k', 'k');
+  events.createIndex('dm', 'dm');
 
   db.createObjectStore('aggregates', { keyPath: indices['aggregates'] });
 
@@ -124,10 +128,14 @@ export const eventToNoteEvent = (e: UnsignedEvent & { id?: string; }): NoteEvent
   const d = dTag && dTag[1];
   const titleTag = e.tags.find(t => t[0] === 'title');
   const tl = titleTag && titleTag[1];
+  const pTag = e.tags.find(t => t[0] === 'p');
+  const po = pTag && pTag[1];
+  let dm = '';
+  if (e.kind === 4 && po) dm = formatDMIndex(po, e.pubkey);
 
   return {
     id: e.id ?? "",
-    k: e.kind as 1 | 9802 | 30023,
+    k: e.kind as 1 | 9802 | 30023 | 4,
     c: e.content,
     ts: e.created_at,
     pk: e.pubkey,
@@ -135,6 +143,8 @@ export const eventToNoteEvent = (e: UnsignedEvent & { id?: string; }): NoteEvent
     re: nip10result.reply?.id,
     me: nip10result.mentions.map(m => m.id),
     p: nip10result.profiles.map(p => p.pubkey),
+    dm,
+    po,
     a,
     am,
     r,

@@ -32,19 +32,20 @@ import {
   watchAll,
 } from "./util/db.ts";
 import { decode } from "nostr-tools/nip19";
-import { finalizeEvent, getPublicKey } from "nostr-tools/pure";
+import { getPublicKey } from "nostr-tools/pure";
 import { Filter } from "nostr-tools/filter";
 import { AggregateEvent, NoteEvent, eventToNoteEvent } from "./util/models.ts";
 // @ts-ignore
 import { SubCloser } from "nostr-tools";
 import { ThreadChatMode } from "./threadChatMode.js";
-import { flattenEvents } from "./util/helpers.js";
+import { createNip07Signer } from "./util/helpers.js";
+import { addDM, formatDMIndex, getDM } from "./util/dm.ts";
 
 const ZapThreads = (props: { [key: string]: string }) => {
   createComputed(() => {
     store.mode = props.mode ? props.mode : "";
     store.npubPro = props.npubPro ? props.npubPro : "";
-    console.log(props);
+    console.log("props", props);
 
     store.anchor = (() => {
       const anchor = props.anchor.trim();
@@ -100,10 +101,15 @@ const ZapThreads = (props: { [key: string]: string }) => {
   const requestedVersion = () => props.version;
 
   const isChatMode = store.mode === "chat" || store.mode === "dm";
+  const isDMMode = store.mode === "dm";
 
   store.profiles = watchAll(() => ["profiles"]);
 
   const closeOnEose = () => disableFeatures().includes("watch");
+
+  // Login external npub/nsec
+  const npubOrNsec = () => props.user;
+  const activeSigner = () => signersStore.active;
 
   // Anchors -> root events -> events
 
@@ -111,6 +117,25 @@ const ZapThreads = (props: { [key: string]: string }) => {
   createComputed(
     on([anchor], () => {
       store.version = requestedVersion();
+    })
+  );
+
+  const [dmsReady, setDMsReady] = createSignal(false);
+
+  // pre-decrypt dms
+  createComputed(
+    on([anchor, activeSigner], async () => {
+      setDMsReady(false);
+      const signer = activeSigner();
+      if (anchor().type !== "npub" || !isDMMode || !signer) return;
+
+      // fetch dms and decrypt
+      const dmi = formatDMIndex(anchor().value, signer!.pk);
+      const dms = await findAll("events", dmi, {
+        index: "dm",
+      });
+      for (const dm of dms) await addDM(dm, signer!);
+      setDMsReady(true);
     })
   );
 
@@ -243,7 +268,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
             return;
           case "npub":
             const signer = signersStore.active;
-            if (!signer) {
+            if (!isDMMode || !signer) {
               store.filter = {};
               return;
             }
@@ -302,7 +327,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
 
         let kinds = [1, 9802, 7, 9735];
 
-        if (isChatMode) {
+        if (isDMMode) {
           kinds = [4];
         }
         // TODO restore with a specific `since` for aggregates
@@ -334,14 +359,10 @@ const ZapThreads = (props: { [key: string]: string }) => {
               const invoiceTag = e.tags.find((t) => t[0] === "bolt11");
               invoiceTag && invoiceTag[1] && (newZaps[e.id] = invoiceTag[1]);
             } else if (e.kind === 4) {
-              const signer = signersStore.active;
-              if (signer) {
-                const peer = e.pubkey === signer.pk ? e.tags.find(t => t.length >= 2 && t[0] === 'p')![1] : e.pubkey;
-                signer.nip04.decrypt!(peer, e.content).then(c => {
-                  e.content = c;
-                  save("events", eventToNoteEvent(e));
-                })
-              }
+              // decrypt and store in RAM, to avoid writing decrypted
+              // events to the database
+              const note = eventToNoteEvent(e);
+              addDM(note, signersStore.active).then(() => save("events", note));
             }
           },
           oneose() {
@@ -401,9 +422,6 @@ const ZapThreads = (props: { [key: string]: string }) => {
     )
   );
 
-  // Login external npub/nsec
-  const npubOrNsec = () => props.user;
-
   // Auto login when external pubkey supplied
   createComputed(
     on(npubOrNsec, (_) => {
@@ -442,37 +460,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
           }
         };
 
-        signersStore.external = {
-          pk: pubkey,
-          signEvent: async (event) => {
-            // Sign with private key if nsec was provided
-            if (sk) {
-              return { sig: finalizeEvent(event, sk).sig };
-            }
-
-            return (await getExt()).signEvent(event);
-          },
-          nip04: {
-            decrypt: async (pubkey: string, ciphertext: string) => {
-              if (sk) throw new Error("Not supported");
-              return (await getExt()).nip04.decrypt(pubkey, ciphertext);
-            },
-            encrypt: async (pubkey: string, plaintext: string) => {
-              if (sk) throw new Error("Not supported");
-              return (await getExt()).nip04.encrypt(pubkey, plaintext);
-            },
-          },
-          nip44: {
-            decrypt: async (pubkey: string, ciphertext: string) => {
-              if (sk) throw new Error("Not supported");
-              return (await getExt()).nip44.decrypt(pubkey, ciphertext);
-            },
-            encrypt: async (pubkey: string, plaintext: string) => {
-              if (sk) throw new Error("Not supported");
-              return (await getExt()).nip44.encrypt(pubkey, plaintext);
-            },
-          }
-        };
+        signersStore.external = createNip07Signer(pubkey, getExt, sk);
         signersStore.active = signersStore.external;
       }
     })
@@ -514,8 +502,8 @@ const ZapThreads = (props: { [key: string]: string }) => {
 
   // Watch all events
   const eventsWatcher = createMemo(() => {
-    const hexUser = decode(npubOrNsec)
-    
+    const hexUser = signersStore.active?.pk;
+
     switch (anchor().type) {
       case "http":
       case "note":
@@ -523,10 +511,13 @@ const ZapThreads = (props: { [key: string]: string }) => {
       case "naddr":
         return watchAll(() => ["events", anchor().value, { index: "a" }]);
       case "npub":
-          return watchAll(() => ["events", anchor().value, { index: "po", k: [4], pk: anchor().value, po: hexUser.data }]);
-      default: // error
-        return () => [];
+        if (isDMMode && hexUser) {
+          const dm = formatDMIndex(anchor().value, hexUser);
+          return watchAll(() => ["events", dm, { index: "dm" }]);
+        }
     }
+    // error
+    return () => [];
   });
   const events = () => eventsWatcher()();
 
@@ -535,10 +526,17 @@ const ZapThreads = (props: { [key: string]: string }) => {
     // calculate only once root event IDs are ready
     if (store.rootEventIds && store.rootEventIds.length) {
       const nested = nest(events());
-      return nested.filter((e) => {
-        // remove all highlights without children (we only want those that have comments on them)
-        return !(e.k === 9802 && e.children.length === 0);
-      });
+      console.log("nested", nested);
+      return nested
+        .filter((e) => {
+          // remove all highlights without children (we only want those that have comments on them)
+          return !(e.k === 9802 && e.children.length === 0);
+        })
+        .map((e) => {
+          // get decrypted content from RAM
+          if (e.k === 4 && dmsReady()) e.c = getDM(e.id) || e.c;
+          return e;
+        });
     }
     return [];
   });

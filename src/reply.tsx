@@ -23,6 +23,7 @@ import { Relay } from "nostr-tools/relay";
 import { normalizeURL } from "nostr-tools/utils";
 import { nip04, nip44 } from "nostr-tools";
 import { createNip07Signer } from "./util/helpers.ts";
+import { addDM } from "./util/dm.ts";
 
 export const ReplyEditor = (props: {
   replyTo?: string;
@@ -96,13 +97,15 @@ export const ReplyEditor = (props: {
 
   // Publishing
 
-  const onSuccess = async (event: Event, notice?: string) => {
+  const onSuccess = async (event: Event, signer: EventSigner, notice?: string) => {
     setLoading(false);
     // reset comment & error message (unless supplied)
     setComment("");
     setErrorMessage(notice ?? "");
 
-    await save("events", eventToNoteEvent(event as Event), { immediate: true });
+    const note = eventToNoteEvent(event as Event);
+    if (isDMmode) await addDM(note, signer);
+    await save("events", note, { immediate: true });
 
     // callback (closes the reply form)
     props.onDone?.call(this);
@@ -159,7 +162,7 @@ export const ReplyEditor = (props: {
       let contentEncrypted = "";
 
       if (signer.nip04.encrypt) {
-        contentEncrypted = await signer.nip04.encrypt("", content);
+        contentEncrypted = await signer.nip04.encrypt(anchor().value, content);
       }
 
       unsignedEvent = {
@@ -167,7 +170,7 @@ export const ReplyEditor = (props: {
         created_at: Math.round(Date.now() / 1000),
         content: contentEncrypted,
         pubkey: signer.pk,
-        tags: [["p", anchor().value]],
+        tags: [], // p-tag is added below
       };
     } else {
       unsignedEvent = {
@@ -264,7 +267,7 @@ export const ReplyEditor = (props: {
 
     if (store.disableFeatures!.includes("publish")) {
       // Simulate publishing
-      setTimeout(() => onSuccess(event), 1000);
+      setTimeout(() => onSuccess(event, signer!), 1000);
     } else {
       const failures: string[] = [];
       const promises = [];
@@ -293,7 +296,7 @@ export const ReplyEditor = (props: {
           relays().length
         } relays (see console for more info)`;
         const notice = !isNpubPro && failures.length > 0 ? msg : undefined;
-        onSuccess(event, notice);
+        onSuccess(event, signer!, notice);
       }
       // clear up failure log
       failures.length = 0;
@@ -377,7 +380,7 @@ export const ReplyEditor = (props: {
               class="ztr-reply-button"
               onClick={() => publish(loggedInUser())}
             >
-              {isNpubPro && <>{isDMmode ? 'Sent' : 'Reply'}</>}
+              {isNpubPro && <>{isDMmode ? 'Send' : 'Reply'}</>}
               {!isNpubPro && (
                 <>
                   Reply as{" "}
@@ -396,7 +399,7 @@ export const ReplyEditor = (props: {
                 class="ztr-reply-button"
                 onClick={() => publish()}
               >
-                {isDMmode ? 'Sent anonymously' : 'Reply'}
+                {isDMmode ? 'Send anonymously' : 'Reply'}
               </button>
             )}
 

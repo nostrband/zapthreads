@@ -27,6 +27,7 @@ import { createNip07Signer } from "./util/helpers.ts";
 export const ReplyEditor = (props: {
   replyTo?: string;
   onDone?: Function;
+  onCancel?: Function;
   input?: boolean;
   isFocus?: boolean;
 }) => {
@@ -40,6 +41,7 @@ export const ReplyEditor = (props: {
   const profiles = store.profiles!;
   const relays = () => store.relays!;
   const isNpubPro = store.npubPro === "true";
+  const isDMmode = store.mode === "dm";
 
   // Sessions
 
@@ -151,13 +153,31 @@ export const ReplyEditor = (props: {
     const content = comment().trim();
     if (!content) return;
 
-    const unsignedEvent: UnsignedEvent = {
-      kind: 1,
-      created_at: Math.round(Date.now() / 1000),
-      content: content,
-      pubkey: signer.pk,
-      tags: generateTags(content),
-    };
+    let unsignedEvent: UnsignedEvent;
+
+    if (isDMmode) {
+      let contentEncrypted = "";
+
+      if (signer.nip04.encrypt) {
+        contentEncrypted = await signer.nip04.encrypt("", content);
+      }
+
+      unsignedEvent = {
+        kind: 4,
+        created_at: Math.round(Date.now() / 1000),
+        content: contentEncrypted,
+        pubkey: signer.pk,
+        tags: [["p", anchor().value]],
+      };
+    } else {
+      unsignedEvent = {
+        kind: 1, // kind 4
+        created_at: Math.round(Date.now() / 1000),
+        content: content, // encript signer.nip04.enccript('ancor', content)
+        pubkey: signer.pk,
+        tags: generateTags(content), // не надо, нужно tags: [['p', 'hex pubkey ancor']]
+      };
+    }
 
     if (store.anchorAuthor !== unsignedEvent.pubkey) {
       // Add p tag from note author to notify them
@@ -171,55 +191,60 @@ export const ReplyEditor = (props: {
       } catch (_) {}
     }
 
-    if (store.client) {
+    if (store.client && !isDMmode) {
       unsignedEvent.tags.push(["client", store.client]);
     }
 
     // If it is a reply, prepare root and reply tags
-    if (props.replyTo) {
-      const replyEvent = await find("events", IDBKeyRange.only(props.replyTo));
-      if (replyEvent) {
-        // If it is a reply, it must have a root
-        unsignedEvent.tags.push(["e", replyEvent.ro!, "", "root"]);
-        // If the user is not replying to themselves, add p to notify
-        if (replyEvent.pk !== unsignedEvent.pubkey) {
-          unsignedEvent.tags.push(["p", replyEvent.pk]);
+    if (!isDMmode) {
+      if (props.replyTo) {
+        const replyEvent = await find(
+          "events",
+          IDBKeyRange.only(props.replyTo)
+        );
+        if (replyEvent) {
+          // If it is a reply, it must have a root
+          unsignedEvent.tags.push(["e", replyEvent.ro!, "", "root"]);
+          // If the user is not replying to themselves, add p to notify
+          if (replyEvent.pk !== unsignedEvent.pubkey) {
+            unsignedEvent.tags.push(["p", replyEvent.pk]);
+          }
         }
-      }
-      unsignedEvent.tags.push(["e", props.replyTo, "", "reply"]);
-    } else {
-      // Otherwise find the root
-      const rootEventId = store.version || store.rootEventIds[0];
-      if (rootEventId) {
-        unsignedEvent.tags.push(["e", rootEventId, "", "root"]);
-      } else if (anchor().type === "http") {
-        // If no root tag is present, create it to use as anchor
-        const url = normalizeURL(anchor().value);
-        const unsignedRootEvent: UnsignedEvent = {
-          pubkey: signer.pk,
-          created_at: Math.round(Date.now() / 1000),
-          kind: 8812,
-          tags: [["r", url]],
-          content: `Comments on ${url} ↴`,
-        };
+        unsignedEvent.tags.push(["e", props.replyTo, "", "reply"]);
+      } else {
+        // Otherwise find the root
+        const rootEventId = store.version || store.rootEventIds[0];
+        if (rootEventId) {
+          unsignedEvent.tags.push(["e", rootEventId, "", "root"]);
+        } else if (anchor().type === "http") {
+          // If no root tag is present, create it to use as anchor
+          const url = normalizeURL(anchor().value);
+          const unsignedRootEvent: UnsignedEvent = {
+            pubkey: signer.pk,
+            created_at: Math.round(Date.now() / 1000),
+            kind: 8812,
+            tags: [["r", url]],
+            content: `Comments on ${url} ↴`,
+          };
 
-        const rootEvent: Event = {
-          id: getEventHash(unsignedRootEvent),
-          ...unsignedRootEvent,
-          ...(await signer.signEvent(unsignedRootEvent)),
-        };
+          const rootEvent: Event = {
+            id: getEventHash(unsignedRootEvent),
+            ...unsignedRootEvent,
+            ...(await signer.signEvent(unsignedRootEvent)),
+          };
 
-        save("events", eventToNoteEvent(rootEvent));
+          save("events", eventToNoteEvent(rootEvent));
 
-        // Publish, store filter and get updated rootTag
-        if (store.disableFeatures!.includes("publish")) {
-          console.log("Publishing root event disabled", rootEvent);
-        } else {
-          pool.publish(relays(), rootEvent);
+          // Publish, store filter and get updated rootTag
+          if (store.disableFeatures!.includes("publish")) {
+            console.log("Publishing root event disabled", rootEvent);
+          } else {
+            pool.publish(relays(), rootEvent);
+          }
+          // Update filter to this rootEvent
+          store.filter = { "#e": [rootEvent.id] };
+          unsignedEvent.tags.push(["e", rootEvent.id, "", "root"]);
         }
-        // Update filter to this rootEvent
-        store.filter = { "#e": [rootEvent.id] };
-        unsignedEvent.tags.push(["e", rootEvent.id, "", "root"]);
       }
     }
 
@@ -304,7 +329,7 @@ export const ReplyEditor = (props: {
       {isNpubPro && !loggedInUser() && (
         <div class="ztr-reply-controls">
           <button class="ztr-reply-login-button" onClick={() => login()}>
-            Reply
+            {isDMmode ? 'Sent' : 'Reply'}
           </button>
         </div>
       )}
@@ -338,12 +363,21 @@ export const ReplyEditor = (props: {
           </Show>
 
           {loggedInUser() && (
+            <>
+                        {props.onCancel && <button
+              disabled={loading()}
+              class="ztr-reply-button ztr-reply-button--cancel"
+              onClick={() => {if(props.onCancel) props.onCancel()}}
+            >
+              Cancel
+            </button>}
+
             <button
               disabled={loading()}
               class="ztr-reply-button"
               onClick={() => publish(loggedInUser())}
             >
-              {isNpubPro && <>Reply</>}
+              {isNpubPro && <>{isDMmode ? 'Sent' : 'Reply'}</>}
               {!isNpubPro && (
                 <>
                   Reply as{" "}
@@ -352,6 +386,7 @@ export const ReplyEditor = (props: {
                 </>
               )}
             </button>
+            </>
           )}
 
           {!loggedInUser() &&
@@ -361,7 +396,7 @@ export const ReplyEditor = (props: {
                 class="ztr-reply-button"
                 onClick={() => publish()}
               >
-                Reply anonymously
+                {isDMmode ? 'Sent anonymously' : 'Reply'}
               </button>
             )}
 
@@ -378,6 +413,7 @@ export const ReplyEditor = (props: {
 
 export const RootComment = (props: { handleExitThread?: boolean }) => {
   const anchor = () => store.anchor!;
+  const isDMmode = store.mode === "dm";
 
   const zapsAggregate = watch(() => [
     "aggregates",
@@ -399,7 +435,7 @@ export const RootComment = (props: { handleExitThread?: boolean }) => {
   return (
     <div class="ztr-comment-new">
       <div class="ztr-comment-body">
-        <ul class="ztr-comment-actions">
+        {!isDMmode && <ul class="ztr-comment-actions">
           <Show when={!store.disableFeatures!.includes("likes")}>
             <li class="ztr-comment-action-like">
               {likeSvg()}
@@ -412,7 +448,7 @@ export const RootComment = (props: { handleExitThread?: boolean }) => {
               <span>{satsAbbrev(zapCount())} sats</span>
             </li>
           </Show>
-        </ul>
+        </ul>}
         <ReplyEditor onDone={() => handleExit()} />
       </div>
     </div>

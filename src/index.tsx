@@ -524,6 +524,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
   // Filter -> local events
   const nestedEvents = createMemo(() => {
     // calculate only once root event IDs are ready
+
     if (store.rootEventIds && store.rootEventIds.length) {
       const nested = nest(events());
       console.log("nested", nested);
@@ -550,6 +551,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
 
   const [showAdvanced, setShowAdvanced] = createSignal(false);
 
+  const classRootComment = isDMMode ? 'ztr-root-comment-editor--message' : ''
   return (
     <>
       <div id="ztr-root">
@@ -569,15 +571,21 @@ const ZapThreads = (props: { [key: string]: string }) => {
         )}
         {anchor().type !== "error" && (
           <>
-            {!store.disableFeatures!.includes("reply") && (
-              <RootComment handleExitThread={true} />
+            {!isDMMode && (
+              <>
+                {!store.disableFeatures!.includes("reply") && (
+                  <RootComment handleExitThread={true} />
+                )}
+              </>
             )}
-            <h2 id="ztr-title">
-              {commentsLength() > 0 &&
-                `${commentsLength()} comment${
-                  commentsLength() == 1 ? "" : "s"
-                }`}
-            </h2>
+            {!isDMMode && (
+              <h2 id="ztr-title">
+                {commentsLength() > 0 &&
+                  `${commentsLength()} comment${
+                    commentsLength() == 1 ? "" : "s"
+                  }`}
+              </h2>
+            )}
             {isChatMode ? (
               <ThreadChatMode
                 child={false}
@@ -586,6 +594,13 @@ const ZapThreads = (props: { [key: string]: string }) => {
               />
             ) : (
               <Thread nestedEvents={nestedEvents} articles={articles} />
+            )}
+            {isDMMode && (
+              <div class={classRootComment}>
+                {!store.disableFeatures!.includes("reply") && (
+                  <RootComment handleExitThread={true} />
+                )}
+              </div>
             )}
           </>
         )}

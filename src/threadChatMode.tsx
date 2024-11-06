@@ -7,7 +7,7 @@ import {
   onMount,
   on,
   createComputed,
-  For,
+  Index,
 } from "solid-js";
 import {
   defaultPicture,
@@ -34,19 +34,17 @@ export const ThreadChatMode = (props: {
   const anchor = () => store.anchor!;
   const profiles = store.profiles!;
   const isDMmode = store.mode === "dm";
-  const classWrap = isDMmode
-    ? "ztr-thread chat-mode dm-mode"
-    : "ztr-thread chat-mode";
 
   return (
-    <div class={classWrap}>
-      <For
+    <div class="ztr-thread chat-mode">
+      <Index
         each={
-          props.child ? props.nestedEvents() : sortByDate(props.nestedEvents())
+          props.child
+            ? props.nestedEvents()
+            : sortByDate(props.nestedEvents()).reverse()
         }
       >
-        {(eventObject) => {
-          const event = () => eventObject;
+        {(event) => {
           const [isOpen, setOpen] = createSignal(false);
           const [isExpanded, setExpanded] = createSignal(false);
           const [isThreadCollapsed, setThreadCollapsed] = createSignal(true);
@@ -303,6 +301,10 @@ export const ThreadChatMode = (props: {
               : "ztr-comment-body ztr-comment-body--message"
             : "ztr-comment-body";
 
+          const classTextComment = isDMmode
+            ? "ztr-comment-text ztr-comment-text--message"
+            : "ztr-comment-text";
+
           return (
             <div
               ref={(el) => (commentRef = el)}
@@ -415,7 +417,7 @@ export const ThreadChatMode = (props: {
 
                 {event().parent &&
                   store.activeThreadId !== event().parent!.id && (
-                    <div class="ztr-comment-text">
+                    <div class={classTextComment}>
                       <div
                         onClick={() => handleGoToParent()}
                         class="replied-budge"
@@ -426,7 +428,7 @@ export const ThreadChatMode = (props: {
                   )}
 
                 {!isDMmode && (
-                  <div class="ztr-comment-text">
+                  <div class={classTextComment}>
                     {isMissingEvent() && (
                       <p class="warning">
                         {warningSvg()}
@@ -468,6 +470,7 @@ export const ThreadChatMode = (props: {
                   classList={{
                     "ztr-comment-text": true,
                     highlight: event().k == 9802,
+                    "ztr-comment-text--message": isDMmode,
                   }}
                   style={
                     !isExpanded() ? { "max-height": `${MAX_HEIGHT}px` } : {}
@@ -479,7 +482,7 @@ export const ThreadChatMode = (props: {
                   <div class="ztr-comment-expand">
                     <a style={{ height: `${svgWidth}px` }}>{expandSvg()}</a>
                     <span onClick={() => setExpanded(true)}>
-                      Show full {isDMmode ? 'message' : 'comment'}
+                      Show full {isDMmode ? "message" : "comment"}
                     </span>
                   </div>
                 )}
@@ -572,7 +575,7 @@ export const ThreadChatMode = (props: {
             </div>
           );
         }}
-      </For>
+      </Index>
     </div>
   );
 };

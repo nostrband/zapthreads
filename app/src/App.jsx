@@ -100,6 +100,7 @@ function App() {
 
       <Dialog onClose={handleClose} open={open()}>
         <DialogTitle>Test chat</DialogTitle>
+        <div style="height: 400px;">
         {anchor() && (
           <zap-threads
             npubpro="true"
@@ -111,6 +112,7 @@ function App() {
             user={npub()}
           />
         )}
+        </div>
       </Dialog>
       <p>{npub() && <span>Logged in as {npub()}</span>}</p>
       <button onClick={() => (npub() ? setNpub("") : setNpub(defaultNpub))}>
@@ -176,7 +178,7 @@ function App() {
         ></input>
       </h3>
 
-      <div style="min-height: 1000px; min-width: 700px; margin-top: -2rem">
+      <div style="height: 600px;">
         {anchor() && (
           <zap-threads
             npubpro="true"

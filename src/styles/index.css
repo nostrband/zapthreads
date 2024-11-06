@@ -554,11 +554,6 @@ svg {
   margin-right: 10px;
 }
 
-.dm-mode {
-  display: flex;
-  flex-direction: column-reverse;
-}
-
 .ztr-comment--message {
   padding: 15px;
   padding-right: 50px;
@@ -585,3 +580,14 @@ svg {
   background-color: #fff;
   padding: 0 15px;
 }
+
+.ztr-root--message {
+  overflow: scroll;
+  height: 100%;
+  margin: 0 !important;
+}
+
+.ztr-comment-text--message, .ztr-comment-text--message p {
+  margin: 0;
+}
+

@@ -6,6 +6,7 @@ import {
   createSignal,
   on,
   onCleanup,
+  onMount,
 } from "solid-js";
 import { customElement } from "solid-element";
 import style from "./styles/index.css?raw";
@@ -549,12 +550,29 @@ const ZapThreads = (props: { [key: string]: string }) => {
     );
   };
 
-  const [showAdvanced, setShowAdvanced] = createSignal(false);
+  // const [showAdvanced, setShowAdvanced] = createSignal(false);
 
+  const classRoot = isDMMode ? 'ztr-root--message' : ''
   const classRootComment = isDMMode ? 'ztr-root-comment-editor--message' : ''
+
+  let parentRef: HTMLDivElement | undefined;
+
+  const scrollParentToBottom = () => {
+    if (parentRef) {
+      parentRef.scrollTop = parentRef.scrollHeight;
+    }
+  };
+
+  onMount(scrollParentToBottom);
+
+  createEffect(() => {
+    commentsLength()
+    scrollParentToBottom();
+  });
+
   return (
     <>
-      <div id="ztr-root">
+      <div ref={(el) => (parentRef = el)} id="ztr-root" class={classRoot}>
         <style>{style}</style>
         {content() && <div id="ztr-content" innerHTML={content()}></div>}
         {anchor().type === "error" && (
@@ -605,7 +623,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
           </>
         )}
 
-        <div
+        {/* <div
           style="float:right; opacity: 0.2;"
           onClick={() => setShowAdvanced(!showAdvanced())}
         >
@@ -620,7 +638,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
             {store.version && <p>Anchor version: {store.version}</p>}
             <button onClick={clearCache}>Clear cache</button>
           </>
-        )}
+        )} */}
       </div>
     </>
   );

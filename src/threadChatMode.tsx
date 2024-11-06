@@ -1,5 +1,4 @@
 import {
-  Index,
   Show,
   createEffect,
   createMemo,
@@ -8,6 +7,7 @@ import {
   onMount,
   on,
   createComputed,
+  For,
 } from "solid-js";
 import {
   defaultPicture,
@@ -40,12 +40,13 @@ export const ThreadChatMode = (props: {
 
   return (
     <div class={classWrap}>
-      <Index
+      <For
         each={
           props.child ? props.nestedEvents() : sortByDate(props.nestedEvents())
         }
       >
-        {(event) => {
+        {(eventObject) => {
+          const event = () => eventObject;
           const [isOpen, setOpen] = createSignal(false);
           const [isExpanded, setExpanded] = createSignal(false);
           const [isThreadCollapsed, setThreadCollapsed] = createSignal(true);
@@ -571,7 +572,7 @@ export const ThreadChatMode = (props: {
             </div>
           );
         }}
-      </Index>
+      </For>
     </div>
   );
 };

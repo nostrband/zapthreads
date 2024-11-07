@@ -21,32 +21,43 @@ import {
   normalizeURL,
 } from "./util/ui.ts";
 import { nest } from "./util/nest.ts";
-import { store, pool, isDisableType, signersStore } from "./util/stores.ts";
-import { Thread, ellipsisSvg } from "./thread.tsx";
+import {
+  isDisableType,
+  signersStore,
+  PreferencesStore,
+} from "./util/stores.ts";
+import { Thread } from "./thread.tsx";
 import { RootComment } from "./reply.tsx";
 import { decode as bolt11Decode } from "light-bolt11-decoder";
-import {
-  clear as clearCache,
-  find,
-  findAll,
-  save,
-  watchAll,
-} from "./util/db.ts";
+import { find, findAll, save, watchAll } from "./util/db.ts";
 import { decode } from "nostr-tools/nip19";
 import { getPublicKey } from "nostr-tools/pure";
 import { Filter } from "nostr-tools/filter";
 import { AggregateEvent, NoteEvent, eventToNoteEvent } from "./util/models.ts";
 // @ts-ignore
-import { SubCloser } from "nostr-tools";
+import { SimplePool, SubCloser } from "nostr-tools";
 import { ThreadChatMode } from "./threadChatMode.js";
 import { createNip07Signer } from "./util/helpers.js";
 import { addDM, formatDMIndex, getDM } from "./util/dm.ts";
+import { createMutable } from "solid-js/store";
 
 const ZapThreads = (props: { [key: string]: string }) => {
+  const [poolSignal] = createSignal(new SimplePool());
+  const [storeSignal] = createSignal(
+    createMutable<PreferencesStore>({
+      rootEventIds: [],
+      filter: {},
+      profiles: () => [],
+      activeThreadId: null,
+      initialThreadId: null,
+    })
+  );
+  const pool = poolSignal();
+  const store = storeSignal();
+
   createComputed(() => {
     store.mode = props.mode ? props.mode : "";
     store.npubPro = props.npubPro ? props.npubPro : "";
-    console.log("props", props);
 
     store.anchor = (() => {
       const anchor = props.anchor.trim();
@@ -57,7 +68,6 @@ const ZapThreads = (props: { [key: string]: string }) => {
         }
 
         const decoded = decode(anchor);
-        console.log({ decoded });
         switch (decoded.type) {
           case "nevent":
             return { type: "note", value: decoded.data.id };
@@ -101,8 +111,8 @@ const ZapThreads = (props: { [key: string]: string }) => {
   const disableFeatures = () => store.disableFeatures!;
   const requestedVersion = () => props.version;
 
-  const isChatMode = store.mode === "chat" || store.mode === "dm";
-  const isDMMode = store.mode === "dm";
+  const isChatMode = props.mode === "chat" || props.mode === "dm";
+  const isDMMode = props.mode === "dm";
 
   store.profiles = watchAll(() => ["profiles"]);
 
@@ -349,7 +359,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
 
         sub = pool.subscribeMany(_relays, [{ ..._filter, kinds, since }], {
           onevent(e) {
-            console.log({ e });
+            // console.log({ e });
             if (e.kind === 1 || e.kind === 9802) {
               if (e.content.trim()) {
                 save("events", eventToNoteEvent(e));
@@ -403,13 +413,14 @@ const ZapThreads = (props: { [key: string]: string }) => {
             setTimeout(async () => {
               // Update profiles of current events (includes anchor author)
               await updateProfiles(
+                pool,
                 [..._events.map((e) => e.pk)],
                 _relays,
                 _profiles
               );
 
               // Save latest received events for each relay
-              saveRelayLatestForFilter(_anchor, _events);
+              saveRelayLatestForFilter(pool, _anchor, _events);
 
               if (closeOnEose()) {
                 sub?.close();
@@ -528,7 +539,6 @@ const ZapThreads = (props: { [key: string]: string }) => {
 
     if (store.rootEventIds && store.rootEventIds.length) {
       const nested = nest(events());
-      console.log("nested", nested);
       return nested
         .filter((e) => {
           // remove all highlights without children (we only want those that have comments on them)
@@ -552,8 +562,8 @@ const ZapThreads = (props: { [key: string]: string }) => {
 
   // const [showAdvanced, setShowAdvanced] = createSignal(false);
 
-  const classRoot = isDMMode ? 'ztr-root--message' : ''
-  const classRootComment = isDMMode ? 'ztr-root-comment-editor--message' : ''
+  const classRoot = isDMMode ? "ztr-root--message" : "";
+  const classRootComment = isDMMode ? "ztr-root-comment-editor--message" : "";
 
   let parentRef: HTMLDivElement | undefined;
 
@@ -566,7 +576,7 @@ const ZapThreads = (props: { [key: string]: string }) => {
   onMount(scrollParentToBottom);
 
   createEffect(() => {
-    commentsLength()
+    commentsLength();
     scrollParentToBottom();
   });
 
@@ -592,7 +602,11 @@ const ZapThreads = (props: { [key: string]: string }) => {
             {!isDMMode && (
               <>
                 {!store.disableFeatures!.includes("reply") && (
-                  <RootComment handleExitThread={true} />
+                  <RootComment
+                    pool={pool}
+                    store={store}
+                    handleExitThread={true}
+                  />
                 )}
               </>
             )}
@@ -606,17 +620,28 @@ const ZapThreads = (props: { [key: string]: string }) => {
             )}
             {isChatMode ? (
               <ThreadChatMode
+                pool={pool}
+                store={store}
                 child={false}
                 nestedEvents={nestedEvents}
                 articles={articles}
               />
             ) : (
-              <Thread nestedEvents={nestedEvents} articles={articles} />
+              <Thread
+                pool={pool}
+                store={store}
+                nestedEvents={nestedEvents}
+                articles={articles}
+              />
             )}
             {isDMMode && (
               <div class={classRootComment}>
                 {!store.disableFeatures!.includes("reply") && (
-                  <RootComment handleExitThread={true} />
+                  <RootComment
+                    pool={pool}
+                    store={store}
+                    handleExitThread={true}
+                  />
                 )}
               </div>
             )}

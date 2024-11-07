@@ -7,7 +7,7 @@ import {
 } from "./util/ui.ts";
 import { Show, createEffect, createSignal } from "solid-js";
 import { UnsignedEvent, Event } from "nostr-tools/core";
-import { EventSigner, pool, signersStore, store } from "./util/stores.ts";
+import { EventSigner, PreferencesStore, signersStore } from "./util/stores.ts";
 import {
   generateSecretKey,
   getPublicKey,
@@ -21,7 +21,7 @@ import { lightningSvg, likeSvg } from "./thread.tsx";
 import { decode, npubEncode } from "nostr-tools/nip19";
 import { Relay } from "nostr-tools/relay";
 import { normalizeURL } from "nostr-tools/utils";
-import { nip04, nip44 } from "nostr-tools";
+import { SimplePool, nip04, nip44 } from "nostr-tools";
 import { createNip07Signer } from "./util/helpers.ts";
 import { addDM } from "./util/dm.ts";
 
@@ -31,7 +31,11 @@ export const ReplyEditor = (props: {
   onCancel?: Function;
   input?: boolean;
   isFocus?: boolean;
+  pool: SimplePool;
+  store: PreferencesStore;
 }) => {
+  const pool = props.pool;
+  const store = props.store;
   const [comment, setComment] = createSignal("");
   const [loading, setLoading] = createSignal(false);
   const [isLoginProcess, setLoginProcess] = createSignal(false);
@@ -75,7 +79,7 @@ export const ReplyEditor = (props: {
         await save("profiles", profile);
       }
       setLoggedInUser(profile);
-      updateProfiles([pk], relays(), profiles());
+      updateProfiles(pool, [pk], relays(), profiles());
     } else {
       setLoggedInUser();
     }
@@ -97,7 +101,11 @@ export const ReplyEditor = (props: {
 
   // Publishing
 
-  const onSuccess = async (event: Event, signer: EventSigner, notice?: string) => {
+  const onSuccess = async (
+    event: Event,
+    signer: EventSigner,
+    notice?: string
+  ) => {
     setLoading(false);
     // reset comment & error message (unless supplied)
     setComment("");
@@ -332,7 +340,7 @@ export const ReplyEditor = (props: {
       {isNpubPro && !loggedInUser() && (
         <div class="ztr-reply-controls">
           <button class="ztr-reply-login-button" onClick={() => login()}>
-            {isDMmode ? 'Sent' : 'Reply'}
+            {isDMmode ? "Send" : "Reply"}
           </button>
         </div>
       )}
@@ -367,28 +375,32 @@ export const ReplyEditor = (props: {
 
           {loggedInUser() && (
             <>
-                        {props.onCancel && <button
-              disabled={loading()}
-              class="ztr-reply-button ztr-reply-button--cancel"
-              onClick={() => {if(props.onCancel) props.onCancel()}}
-            >
-              Cancel
-            </button>}
-
-            <button
-              disabled={loading()}
-              class="ztr-reply-button"
-              onClick={() => publish(loggedInUser())}
-            >
-              {isNpubPro && <>{isDMmode ? 'Send' : 'Reply'}</>}
-              {!isNpubPro && (
-                <>
-                  Reply as{" "}
-                  {loggedInUser()!.n ||
-                    shortenEncodedId(npubEncode(loggedInUser()!.pk))}
-                </>
+              {props.onCancel && (
+                <button
+                  disabled={loading()}
+                  class="ztr-reply-button ztr-reply-button--cancel"
+                  onClick={() => {
+                    if (props.onCancel) props.onCancel();
+                  }}
+                >
+                  Cancel
+                </button>
               )}
-            </button>
+
+              <button
+                disabled={loading()}
+                class="ztr-reply-button"
+                onClick={() => publish(loggedInUser())}
+              >
+                {isNpubPro && <>{isDMmode ? "Send" : "Reply"}</>}
+                {!isNpubPro && (
+                  <>
+                    Reply as{" "}
+                    {loggedInUser()!.n ||
+                      shortenEncodedId(npubEncode(loggedInUser()!.pk))}
+                  </>
+                )}
+              </button>
             </>
           )}
 
@@ -399,7 +411,7 @@ export const ReplyEditor = (props: {
                 class="ztr-reply-button"
                 onClick={() => publish()}
               >
-                {isDMmode ? 'Send anonymously' : 'Reply'}
+                {isDMmode ? "Send anonymously" : "Reply"}
               </button>
             )}
 
@@ -414,9 +426,13 @@ export const ReplyEditor = (props: {
   );
 };
 
-export const RootComment = (props: { handleExitThread?: boolean }) => {
-  const anchor = () => store.anchor!;
-  const isDMmode = store.mode === "dm";
+export const RootComment = (props: {
+  handleExitThread?: boolean;
+  pool: SimplePool;
+  store: PreferencesStore;
+}) => {
+  const anchor = () => props.store.anchor!;
+  const isDMmode = props.store.mode === "dm";
 
   const zapsAggregate = watch(() => [
     "aggregates",
@@ -431,28 +447,34 @@ export const RootComment = (props: { handleExitThread?: boolean }) => {
 
   const handleExit = () => {
     if (props.handleExitThread) {
-      store.activeThreadId = null;
+      props.store.activeThreadId = null;
     }
   };
 
   return (
     <div class="ztr-comment-new">
       <div class="ztr-comment-body">
-        {!isDMmode && <ul class="ztr-comment-actions">
-          <Show when={!store.disableFeatures!.includes("likes")}>
-            <li class="ztr-comment-action-like">
-              {likeSvg()}
-              <span>{likeCount()} likes</span>
-            </li>
-          </Show>
-          <Show when={!store.disableFeatures!.includes("zaps")}>
-            <li class="ztr-comment-action-zap">
-              {lightningSvg()}
-              <span>{satsAbbrev(zapCount())} sats</span>
-            </li>
-          </Show>
-        </ul>}
-        <ReplyEditor onDone={() => handleExit()} />
+        {!isDMmode && (
+          <ul class="ztr-comment-actions">
+            <Show when={!props.store.disableFeatures!.includes("likes")}>
+              <li class="ztr-comment-action-like">
+                {likeSvg()}
+                <span>{likeCount()} likes</span>
+              </li>
+            </Show>
+            <Show when={!props.store.disableFeatures!.includes("zaps")}>
+              <li class="ztr-comment-action-zap">
+                {lightningSvg()}
+                <span>{satsAbbrev(zapCount())} sats</span>
+              </li>
+            </Show>
+          </ul>
+        )}
+        <ReplyEditor
+          store={props.store}
+          pool={props.pool}
+          onDone={() => handleExit()}
+        />
       </div>
     </div>
   );

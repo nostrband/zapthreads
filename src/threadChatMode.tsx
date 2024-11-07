@@ -22,15 +22,20 @@ import { ReplyEditor } from "./reply.tsx";
 import { NestedNoteEvent } from "./util/nest.ts";
 import { noteEncode, npubEncode } from "nostr-tools/nip19";
 import { createElementSize } from "@solid-primitives/resize-observer";
-import { store } from "./util/stores.ts";
+import { PreferencesStore } from "./util/stores.ts";
 import { NoteEvent } from "./util/models.ts";
 import { flattenEvents } from "./util/helpers.js";
+import { SimplePool } from "nostr-tools";
 
 export const ThreadChatMode = (props: {
   nestedEvents: () => NestedNoteEvent[];
   articles: () => NoteEvent[];
   child: boolean;
+  store: PreferencesStore;
+  pool: SimplePool;
 }) => {
+  const store = props.store;
+  const pool = props.pool;
   const anchor = () => store.anchor!;
   const profiles = store.profiles!;
   const isDMmode = store.mode === "dm";
@@ -537,6 +542,8 @@ export const ThreadChatMode = (props: {
                       setOpen(false);
                       handleOpenLastComment();
                     }}
+                    pool={pool}
+                    store={store}
                   />
                 )}
               </div>
@@ -556,6 +563,8 @@ export const ThreadChatMode = (props: {
                       )
                     }
                     articles={props.articles}
+                    pool={pool}
+                    store={store}
                   />
                 </div>
               )}
@@ -569,6 +578,8 @@ export const ThreadChatMode = (props: {
                       setOpen(false);
                       handleOpenLastComment();
                     }}
+                    pool={pool}
+                    store={store}
                   />
                 </div>
               )}

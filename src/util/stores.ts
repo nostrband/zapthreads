@@ -1,19 +1,8 @@
 import { UnsignedEvent } from "nostr-tools/pure";
-import { SimplePool } from "nostr-tools/pool";
 import { Filter } from "nostr-tools/filter";
 import { Profile } from "./models.ts";
 import { createMutable } from "solid-js/store";
 
-// Global data (for now)
-export const pool = new SimplePool();
-
-export const store = createMutable<PreferencesStore>({
-  rootEventIds: [],
-  filter: {},
-  profiles: () => [],
-  activeThreadId: null,
-  initialThreadId: null,
-});
 
 export const signersStore = createMutable<SignersStore>({});
 

@@ -1,12 +1,15 @@
 import { DBSchema, IDBPDatabase, StoreNames } from "idb";
 import { parse } from "nostr-tools/nip10";
 import { UnsignedEvent } from "nostr-tools/pure";
+import { formatDMIndex } from "./dm.ts";
+
+export const DB_VERSION = 3;
 
 // models
 
 export type NoteEvent = {
   id: string;
-  k: 1 | 8812 | 9802 | 30023;
+  k: 1 | 8812 | 9802 | 30023 | 4;
   c: string;
   ts: number;
   pk: string;
@@ -21,6 +24,8 @@ export type NoteEvent = {
   t?: string[]; // t tags
   d?: string; // d tag
   tl?: string; // title
+  po?: string;
+  dm?: string;
 };
 
 export type AggregateEvent = {
@@ -31,10 +36,10 @@ export type AggregateEvent = {
 };
 
 export type Profile = {
-  pk: string,
-  ts: number,
-  l: number, // last checked
-  n?: string,
+  pk: string;
+  ts: number;
+  l: number; // last checked
+  n?: string;
   i?: string;
 };
 
@@ -51,89 +56,104 @@ export interface ZapthreadsSchema extends DBSchema {
     key: string;
     value: NoteEvent;
     indexes: {
-      'a': string;
-      'ro': string;
-      'r': string;
-      'd': string;
-      'k': number;
+      a: string;
+      ro: string;
+      r: string;
+      d: string;
+      k: number;
+      dm: string;
     };
   };
   aggregates: {
     key: string[];
     value: AggregateEvent;
-  },
+  };
   profiles: {
     key: string;
     value: Profile;
     indexes: {
-      'l': number;
+      l: number;
     };
   };
   relays: {
     key: string[];
     value: Relay;
     indexes: {
-      'a': string;
+      a: string;
     };
   };
 }
 
 export const indices: { [key in StoreNames<ZapthreadsSchema>]: any } = {
-  'events': 'id',
-  'aggregates': ['eid', 'k'],
-  'profiles': ['pk'],
-  'relays': ['n', 'a']
+  events: "id",
+  aggregates: ["eid", "k"],
+  profiles: ["pk"],
+  relays: ["n", "a"],
 };
 
-export const upgrade = async (db: IDBPDatabase<ZapthreadsSchema>, currentVersion: number) => {
-  if (currentVersion <= 1) {
+export const upgrade = async (
+  db: IDBPDatabase<ZapthreadsSchema>,
+  currentVersion: number
+) => {
+  if (currentVersion < DB_VERSION) {
     const names = [...db.objectStoreNames];
-    await Promise.all(names.map(n => db.deleteObjectStore(n)));
+    await Promise.all(names.map((n) => db.deleteObjectStore(n)));
   }
 
-  const events = db.createObjectStore('events', { keyPath: indices['events'] });
-  events.createIndex('a', 'a');
-  events.createIndex('ro', 'ro');
-  events.createIndex('r', 'r');
-  events.createIndex('d', 'd');
-  events.createIndex('k', 'k');
+  const events = db.createObjectStore("events", { keyPath: indices["events"] });
+  events.createIndex("a", "a");
+  events.createIndex("ro", "ro");
+  events.createIndex("r", "r");
+  events.createIndex("d", "d");
+  events.createIndex("k", "k");
+  events.createIndex("dm", "dm");
 
-  db.createObjectStore('aggregates', { keyPath: indices['aggregates'] });
+  db.createObjectStore("aggregates", { keyPath: indices["aggregates"] });
 
-  const profiles = db.createObjectStore('profiles', { keyPath: indices['profiles'] });
-  profiles.createIndex('l', 'l');
+  const profiles = db.createObjectStore("profiles", {
+    keyPath: indices["profiles"],
+  });
+  profiles.createIndex("l", "l");
 
-  const relays = db.createObjectStore('relays', { keyPath: indices['relays'] });
-  relays.createIndex('a', 'a');
+  const relays = db.createObjectStore("relays", { keyPath: indices["relays"] });
+  relays.createIndex("a", "a");
 };
 
 // util
 
-export const eventToNoteEvent = (e: UnsignedEvent & { id?: string; }): NoteEvent => {
+export const eventToNoteEvent = (
+  e: UnsignedEvent & { id?: string }
+): NoteEvent => {
   const nip10result = parse(e);
 
-  const aTag = e.tags.find(t => t[0] === 'a');
+  const aTag = e.tags.find((t) => t[0] === "a");
   const a = aTag && aTag[1];
-  const am = aTag && aTag[3] === 'mention';
-  const rTag = e.tags.find(t => t[0] === 'r');
+  const am = aTag && aTag[3] === "mention";
+  const rTag = e.tags.find((t) => t[0] === "r");
   const r = rTag && rTag[1];
-  const tTags = e.tags.filter(t => t[0] === 't');
-  const t = [...new Set(tTags.map(t => t[1]))]; // dedup tags
-  const dTag = e.tags.find(t => t[0] === 'd');
+  const tTags = e.tags.filter((t) => t[0] === "t");
+  const t = [...new Set(tTags.map((t) => t[1]))]; // dedup tags
+  const dTag = e.tags.find((t) => t[0] === "d");
   const d = dTag && dTag[1];
-  const titleTag = e.tags.find(t => t[0] === 'title');
+  const titleTag = e.tags.find((t) => t[0] === "title");
   const tl = titleTag && titleTag[1];
+  const pTag = e.tags.find((t) => t[0] === "p");
+  const po = pTag && pTag[1];
+  let dm = "";
+  if (e.kind === 4 && po) dm = formatDMIndex(po, e.pubkey);
 
   return {
     id: e.id ?? "",
-    k: e.kind as 1 | 9802 | 30023,
+    k: e.kind as 1 | 9802 | 30023 | 4,
     c: e.content,
     ts: e.created_at,
     pk: e.pubkey,
     ro: nip10result.root?.id,
     re: nip10result.reply?.id,
-    me: nip10result.mentions.map(m => m.id),
-    p: nip10result.profiles.map(p => p.pubkey),
+    me: nip10result.mentions.map((m) => m.id),
+    p: nip10result.profiles.map((p) => p.pubkey),
+    dm,
+    po,
     a,
     am,
     r,

@@ -7,6 +7,25 @@
     <link rel="shortcut icon" type="image/ico" href="/src/assets/favicon.png" />
     <title>ZapThreads Sample App</title>
     <script src="./nostr-login.js" data-perms="sign_event:1985,sign_event:3,sign_event:30000" data-local-signup="false"></script>
+    <script>
+      document.addEventListener("nlAuth", async (e) => {
+        console.log("nlAuth", e);
+
+        if (e.detail.type === 'login' || e.detail.type === 'signup') {
+          window.__nlAuthed = true;
+        } else {
+          window.__nlAuthed = false;
+        }
+
+        const zapThreads = document.querySelector('zap-threads');
+        if (zapThreads) {
+          if (window.__nlAuthed)
+            zapThreads.setAttribute("user", await window.nostr.getPublicKey());
+          else
+            zapThreads.setAttribute("user", "");
+        }
+      });
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

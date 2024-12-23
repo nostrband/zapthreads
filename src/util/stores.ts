@@ -1,19 +1,8 @@
 import { UnsignedEvent } from "nostr-tools/pure";
-import { SimplePool } from "nostr-tools/pool";
 import { Filter } from "nostr-tools/filter";
 import { Profile } from "./models.ts";
 import { createMutable } from "solid-js/store";
 
-// Global data (for now)
-export const pool = new SimplePool();
-
-export const store = createMutable<PreferencesStore>({
-  rootEventIds: [],
-  filter: {},
-  profiles: () => [],
-  activeThreadId: null,
-  initialThreadId: null,
-});
 
 export const signersStore = createMutable<SignersStore>({});
 
@@ -23,9 +12,20 @@ export type SignersStore = {
   [key in 'active' | 'anonymous' | 'internal' | 'external']?: EventSigner;
 };
 export type SignEvent = (event: UnsignedEvent) => Promise<{ sig: string; }>;
-export type EventSigner = {
-  pk: string,
+export type EncDec = (pubkey: string, data: string) => Promise<string>;
+export type EventSignerExt = {
   signEvent?: SignEvent;
+  nip04: {
+    decrypt?: EncDec;
+    encrypt?: EncDec;
+  },
+  nip44: {
+    decrypt?: EncDec;
+    encrypt?: EncDec;
+  },
+};
+export type EventSigner = EventSignerExt & {
+  pk: string,
 };
 
 export type UrlPrefixesKeys = 'naddr' | 'nevent' | 'note' | 'npub' | 'nprofile' | 'tag';
@@ -57,7 +57,7 @@ export type PreferencesStore = {
   initialThreadId?: string | null
 };
 
-export type Anchor = { type: 'http' | 'naddr' | 'note' | 'error', value: string; };
+export type Anchor = { type: 'http' | 'naddr' | 'note' | 'error' | 'npub', value: string; };
 
 // Globals
 
@@ -66,6 +66,14 @@ declare global {
     nostr?: {
       getPublicKey(): Promise<string>;
       signEvent: SignEvent;
+      nip04: {
+        decrypt: EncDec;
+        encrypt: EncDec;
+      },
+      nip44: {
+        decrypt: EncDec;
+        encrypt: EncDec;
+      }
     };
   }
 }

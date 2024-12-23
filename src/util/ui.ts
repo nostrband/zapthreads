@@ -1,15 +1,16 @@
 import { NestedNoteEvent } from "./nest.ts";
-import { Anchor, UrlPrefixesKeys, pool, PreferencesStore } from "./stores.ts";
+import { Anchor, UrlPrefixesKeys, PreferencesStore } from "./stores.ts";
 import { decode } from "nostr-tools/nip19";
 import { Filter } from "nostr-tools/filter";
 import { matchAll, replaceAll } from "nostr-tools/nip27";
 import nmd from "nano-markdown";
 import { findAll, save } from "./db.ts";
 import { NoteEvent, Profile } from "./models.ts";
+import { SimplePool } from "nostr-tools";
 
 // Misc profile helpers
 
-export const updateProfiles = async (pubkeys: string[], relays: string[], profiles: Profile[]): Promise<void> => {
+export const updateProfiles = async (pool: SimplePool, pubkeys: string[], relays: string[], profiles: Profile[]): Promise<void> => {
   const now = +new Date;
   const sixHours = 21600000;
 
@@ -67,7 +68,7 @@ export const getRelayLatest = async (anchor: Anchor, relayNames: string[]) => {
 // This since only applies to filter queries
 // ({ "#e": store.rootEventIds }, { "#a": [anchor().value] })
 // and not to aggregate or root event queries
-export const saveRelayLatestForFilter = async (anchor: Anchor, events: NoteEvent[]) => {
+export const saveRelayLatestForFilter = async (pool: SimplePool, anchor: Anchor, events: NoteEvent[]) => {
   const obj: { [url: string]: number; } = {};
 
   for (const e of events) {

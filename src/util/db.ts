@@ -2,7 +2,7 @@ import { InitializedResource, Signal, createMemo, createResource, on } from "sol
 import batchedFunction from "./batched-function.ts";
 import { createMutable, createStore, reconcile, unwrap } from "solid-js/store";
 import { IDBPDatabase, IndexKey, IndexNames, StoreNames, StoreValue, openDB } from "idb";
-import { ZapthreadsSchema, indices, upgrade } from "./models.ts";
+import { DB_VERSION, ZapthreadsSchema, indices, upgrade } from "./models.ts";
 
 type DBTypes = ZapthreadsSchema;
 
@@ -18,7 +18,7 @@ const db = async () => {
     return;
   }
   try {
-    return __db ||= await openDB<ZapthreadsSchema>('zapthreads', 2, { upgrade });
+    return __db ||= await openDB<ZapthreadsSchema>('zapthreads', DB_VERSION, { upgrade });
   }
   catch (e) {
     // IndexedDB is not supported, do not attempt to open again and use in-memory database

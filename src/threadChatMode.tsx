@@ -39,9 +39,28 @@ export const ThreadChatMode = (props: {
   const anchor = () => store.anchor!;
   const profiles = store.profiles!;
   const isDMmode = store.mode === "dm";
+  const style: any = {};
+  if (isDMmode)
+    style["max-height"] = Math.floor(window.innerHeight / 2.2) + "px";
+
+  let container: HTMLDivElement | undefined;
+
+  const scrollToBottom = () => {
+    if (isDMmode && container) {
+      container!.scrollTop = container!.scrollHeight;
+    }
+  };
+
+  onMount(scrollToBottom);
+
+  createEffect(
+    on([props.nestedEvents], () => {
+      scrollToBottom();
+    })
+  );
 
   return (
-    <div class="ztr-thread chat-mode">
+    <div ref={container} class="ztr-thread chat-mode" style={style}>
       <Index
         each={
           props.child

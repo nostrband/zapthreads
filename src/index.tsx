@@ -565,24 +565,13 @@ const ZapThreads = (props: { [key: string]: string }) => {
   const classRoot = isDMMode ? "ztr-root--message" : "";
   const classRootComment = isDMMode ? "ztr-root-comment-editor--message" : "";
 
-  let parentRef: HTMLDivElement | undefined;
-
-  const scrollParentToBottom = () => {
-    if (parentRef) {
-      parentRef.scrollTop = parentRef.scrollHeight;
-    }
-  };
-
-  onMount(scrollParentToBottom);
-
   createEffect(() => {
     commentsLength();
-    scrollParentToBottom();
   });
 
   return (
     <>
-      <div ref={(el) => (parentRef = el)} id="ztr-root" class={classRoot}>
+      <div id="ztr-root" class={classRoot}>
         <style>{style}</style>
         {content() && <div id="ztr-content" innerHTML={content()}></div>}
         {anchor().type === "error" && (

@@ -168,6 +168,10 @@ ul.ztr-comment-info-items li a {
   margin-left: 2em;
 }
 
+.ztr-thread.chat-mode {
+  overflow: auto;
+}
+
 .chat-mode .ztr-comment-replies {
   margin-left: 0;
 }
@@ -582,7 +586,7 @@ svg {
 }
 
 .ztr-root--message {
-  overflow: scroll;
+  overflow: hidden;
   height: 100%;
   margin: 0 !important;
 }

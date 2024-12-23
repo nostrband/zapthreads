@@ -214,8 +214,16 @@ export const ReplyEditor = (props: {
           IDBKeyRange.only(props.replyTo)
         );
         if (replyEvent) {
-          // If it is a reply, it must have a root
-          unsignedEvent.tags.push(["e", replyEvent.ro!, "", "root"]);
+          // If it is a reply, it must have a root, and since we're
+          // showing mentions too we try to reuse the root of the
+          // replied-to event, but if that fails we fall-back
+          // the anchor as root
+          if (replyEvent.ro)
+            unsignedEvent.tags.push(["e", replyEvent.ro!, "", "root"]);
+          else if (anchor().type === "naddr")
+            unsignedEvent.tags.push(["a", anchor().value, "", "root"]);
+          else unsignedEvent.tags.push(["e", anchor().value, "", "root"]);
+
           // If the user is not replying to themselves, add p to notify
           if (replyEvent.pk !== unsignedEvent.pubkey) {
             unsignedEvent.tags.push(["p", replyEvent.pk]);
@@ -255,29 +263,29 @@ export const ReplyEditor = (props: {
           // Update filter to this rootEvent
           store.filter = { "#e": [rootEvent.id] };
           unsignedEvent.tags.push(["e", rootEvent.id, "", "root"]);
+          if (anchor().type === "naddr") {
+            unsignedEvent.tags.push(["a", anchor().value, "", "root"]);
+          }
         }
       }
     }
 
-    if (anchor().type === "naddr") {
-      unsignedEvent.tags.push(["a", anchor().value, "", "root"]);
-    }
-
     const id = getEventHash(unsignedEvent);
+
+    setLoading(true);
 
     // Attempt to sign the event
     const signature = await signer.signEvent(unsignedEvent);
 
     const event: Event = { id, ...unsignedEvent, ...signature };
 
-    setLoading(true);
     console.log(JSON.stringify(event, null, 2));
 
     if (store.disableFeatures!.includes("publish")) {
       // Simulate publishing
       setTimeout(() => onSuccess(event, signer!), 1000);
     } else {
-      const failures: string[] = [];
+      const oks: string[] = [];
       const promises = [];
       for (const relayUrl of relays()) {
         promises.push(
@@ -285,9 +293,9 @@ export const ReplyEditor = (props: {
             try {
               const relay = await Relay.connect(relayUrl);
               await relay.publish(event);
+              oks.push(relayUrl);
             } catch (e) {
               console.warn(e);
-              failures.push(relayUrl);
             }
             ok();
           })
@@ -295,19 +303,28 @@ export const ReplyEditor = (props: {
       }
 
       // publish in parallel
-      await Promise.allSettled(promises);
+      await Promise.race([
+        Promise.allSettled(promises),
+        new Promise<void>((ok) =>
+          setTimeout(() => {
+            console.log("send timeout");
+            ok();
+          }, 10000)
+        ),
+      ]);
 
-      if (failures.length === relays().length) {
+      if (!oks.length) {
         onError("Error: Your comment was not published to any relay");
       } else {
-        const msg = `Published to ${failures.length}/${
+        const msg = `Published to ${oks.length}/${
           relays().length
         } relays (see console for more info)`;
-        const notice = !isNpubPro && failures.length > 0 ? msg : undefined;
+        const notice =
+          !isNpubPro && oks.length < relays().length ? msg : undefined;
         onSuccess(event, signer!, notice);
       }
-      // clear up failure log
-      failures.length = 0;
+      // clear up
+      //      oks.length = 0;
     }
   };
 
@@ -331,7 +348,10 @@ export const ReplyEditor = (props: {
         <textarea
           disabled={loading()}
           value={comment()}
-          placeholder={store.replyPlaceholder || "Add your comment..."}
+          placeholder={
+            store.replyPlaceholder ||
+            (isDMmode ? "Your message..." : "Add your comment...")
+          }
           autofocus={autofocus}
           ref={ref}
           onChange={(e) => setComment(e.target.value)}
@@ -395,7 +415,7 @@ export const ReplyEditor = (props: {
                 {isNpubPro && <>{isDMmode ? "Send" : "Reply"}</>}
                 {!isNpubPro && (
                   <>
-                    Reply as{" "}
+                    {isDMmode ? "Send" : "Reply"} as{" "}
                     {loggedInUser()!.n ||
                       shortenEncodedId(npubEncode(loggedInUser()!.pk))}
                   </>

@@ -674,6 +674,7 @@ customElement<ZapThreadsAttributes>(
     author: "",
     disable: "",
     urls: "",
+    client: "",
     "reply-placeholder": "",
     "legacy-url": "",
   },
@@ -689,6 +690,7 @@ customElement<ZapThreadsAttributes>(
         author={props["author"] ?? ""}
         disable={props["disable"] ?? ""}
         urls={props["urls"] ?? ""}
+        client={props["client"] ?? ""}
         replyPlaceholder={props["reply-placeholder"] ?? ""}
         legacyUrl={props["legacy-url"] ?? ""}
       />
@@ -708,5 +710,6 @@ export type ZapThreadsAttributes = {
     | "reply-placeholder"
     | "legacy-url"
     | "mode"
+    | "client"
     | "npubpro"]?: string;
 } & JSX.HTMLAttributes<HTMLElement>;

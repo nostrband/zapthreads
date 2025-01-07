@@ -213,28 +213,51 @@ export const ReplyEditor = (props: {
           "events",
           IDBKeyRange.only(props.replyTo)
         );
+        console.log("replyEvent", replyEvent);
         if (replyEvent) {
           // If it is a reply, it must have a root, and since we're
           // showing mentions too we try to reuse the root of the
           // replied-to event, but if that fails we fall-back
           // the anchor as root
-          if (replyEvent.ro)
+
+          // try to reuse the root from replyEvent
+          let hasRoot = false;
+          if (replyEvent.ro) {
+            hasRoot = true;
             unsignedEvent.tags.push(["e", replyEvent.ro!, "", "root"]);
-          else if (anchor().type === "naddr")
-            unsignedEvent.tags.push(["a", anchor().value, "", "root"]);
-          else unsignedEvent.tags.push(["e", anchor().value, "", "root"]);
+          }
+          // assume a && !am means 'a is root'
+          if (replyEvent.a && !replyEvent.am) {
+            hasRoot = true;
+            unsignedEvent.tags.push(["a", replyEvent.a!, "", "root"]);
+          }
+
+          // if no root - use anchor
+          if (!hasRoot) {
+            // use 'a' from anchor
+            if (anchor().type === "naddr")
+              unsignedEvent.tags.push(["a", anchor().value, "", "root"]);
+
+            // use 'e' from anchor
+            const rootEventId = store.version || store.rootEventIds[0];
+            if (rootEventId)
+              unsignedEvent.tags.push(["e", rootEventId, "", "root"]);
+          }
 
           // If the user is not replying to themselves, add p to notify
           if (replyEvent.pk !== unsignedEvent.pubkey) {
             unsignedEvent.tags.push(["p", replyEvent.pk]);
           }
         }
+
         unsignedEvent.tags.push(["e", props.replyTo, "", "reply"]);
       } else {
         // Otherwise find the root
         const rootEventId = store.version || store.rootEventIds[0];
         if (rootEventId) {
           unsignedEvent.tags.push(["e", rootEventId, "", "root"]);
+          if (anchor().type === "naddr")
+            unsignedEvent.tags.push(["a", anchor().value, "", "root"]);
         } else if (anchor().type === "http") {
           // If no root tag is present, create it to use as anchor
           const url = normalizeURL(anchor().value);
@@ -263,9 +286,6 @@ export const ReplyEditor = (props: {
           // Update filter to this rootEvent
           store.filter = { "#e": [rootEvent.id] };
           unsignedEvent.tags.push(["e", rootEvent.id, "", "root"]);
-          if (anchor().type === "naddr") {
-            unsignedEvent.tags.push(["a", anchor().value, "", "root"]);
-          }
         }
       }
     }
